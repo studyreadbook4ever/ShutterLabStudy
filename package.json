@@ -1,0 +1,24 @@
+{
+  "name": "shutter-lab",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Unlicense",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "description": "An interactive rigid-body camera lab with CUDA and WebGL2 rolling shutter rendering",
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node scripts/build.mjs",
+    "build:cuda": "make -C native",
+    "check": "node scripts/verify.mjs",
+    "test": "node --test tests/physics.test.mjs tests/settings.test.mjs",
+    "test:api": "node --test tests/api.test.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "test:webgl": "node tests/webgl.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

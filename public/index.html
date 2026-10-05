@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0e13" />
+    <title>Shutter Lab — 회전 운동과 카메라 실험실</title>
+    <meta
+      name="description"
+      content="여러 회전 물체를 CUDA 또는 WebGL2로 렌더링하고 Global shutter, Rolling shutter와 Pinhole, Fisheye 카메라를 비교하는 물리 실험실."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Shutter Lab 홈"
+        ><img src="/favicon.svg" alt="" width="34" height="34" /><span
+          >Shutter<span class="brand-light">Lab</span></span
+        ></a
+      >
+      <div class="topbar-center">
+        <span class="lab-index">EXPERIMENT 03</span
+        ><span class="topbar-divider"></span
+        ><span>회전 운동 × 카메라 이론</span>
+      </div>
+      <button id="theory-open" class="text-button">
+        <span class="book-icon" aria-hidden="true">▤</span> 실험 가이드
+      </button>
+    </header>
+    <div class="workspace">
+      <aside class="controls" aria-label="실험 설정">
+        <div class="controls-title">
+          <span class="eyebrow">EXPERIMENT SETUP</span
+          ><button
+            id="reset"
+            class="icon-button"
+            title="현재 프리셋으로 초기화"
+            aria-label="현재 프리셋으로 초기화"
+          >
+            ↺
+          </button>
+        </div>
+        <div class="preset-label">실험 프리셋</div>
+        <div class="preset-grid" id="presets">
+          <button class="preset active" data-preset="baseline">
+            <span class="preset-symbol">◉</span><span>기본 비교</span>
+          </button>
+          <button class="preset" data-preset="fast">
+            <span class="preset-symbol">≋</span><span>빠른 회전</span>
+          </button>
+          <button class="preset" data-preset="fisheye">
+            <span class="preset-symbol">◎</span><span>어안 렌즈</span>
+          </button>
+          <button class="preset" data-preset="blur">
+            <span class="preset-symbol">▥</span><span>긴 노출</span>
+          </button>
+        </div>
+        <section class="object-section">
+          <div class="object-title">
+            실험 물체 <span id="object-name">막대</span>
+          </div>
+          <div class="object-grid" role="group" aria-label="실험 물체 선택">
+            <button data-object="0" class="active" aria-pressed="true">
+              <span aria-hidden="true">╱</span>막대</button
+            ><button data-object="1" aria-pressed="false">
+              <span aria-hidden="true">✣</span>프로펠러</button
+            ><button data-object="2" aria-pressed="false">
+              <span aria-hidden="true">□</span>프레임</button
+            ><button data-object="3" aria-pressed="false">
+              <span aria-hidden="true">⊕</span>휠
+            </button>
+          </div>
+        </section>
+        <div class="control-tabs" role="group" aria-label="설정 종류">
+          <button data-controls="camera" class="active" aria-pressed="true">
+            카메라·센서</button
+          ><button data-controls="physics" aria-pressed="false">
+            회전 물리
+          </button>
+        </div>
+        <section class="control-section" id="physics-controls" hidden>
+          <h2>
+            <span class="section-number">01</span> 회전 물리
+            <span class="section-tag">DYNAMICS</span>
+          </h2>
+          <div class="range-control">
+            <label for="rpm"
+              >회전 속도 설정
+              <output id="rpm-value">120 <small>rpm</small></output></label
+            ><input
+              id="rpm"
+              type="range"
+              min="0"
+              max="600"
+              step="5"
+              value="120"
+            />
+            <div class="range-ends"><span>0</span><span>600 rpm</span></div>
+          </div>
+          <div class="range-control">
+            <label for="torque"
+              >모터 토크
+              <output id="torque-value">0.00 <small>N·m</small></output></label
+            ><input
+              id="torque"
+              type="range"
+              min="-2"
+              max="2"
+              step="0.05"
+              value="0"
+            />
+          </div>
+          <div class="range-control">
+            <label for="inertia"
+              >회전 관성
+              <output id="inertia-value"
+                >0.50 <small>kg·m²</small></output
+              ></label
+            ><input
+              id="inertia"
+              type="range"
+              min="0.05"
+              max="2"
+              step="0.05"
+              value="0.5"
+            />
+          </div>
+          <div class="range-control">
+            <label for="damping"
+              >회전 감쇠
+              <output id="damping-value"
+                >0.00 <small>N·m·s</small></output
+              ></label
+            ><input
+              id="damping"
+              type="range"
+              min="0"
+              max="0.5"
+              step="0.01"
+              value="0"
+            />
+          </div>
+          <div class="range-control">
+            <label for="pose-angle"
+              >자세 각도
+              <output id="pose-angle-value"
+                >41.3 <small>°</small></output
+              ></label
+            ><input
+              id="pose-angle"
+              type="range"
+              min="0"
+              max="360"
+              step="0.1"
+              value="41.3"
+            />
+            <div class="range-ends">
+              <span>조절하면 일시정지</span><span>360°</span>
+            </div>
+          </div>
+          <p class="control-note">
+            토크는 회전을 가속하고, 감쇠는 속도에 비례해 회전을 늦춥니다.
+          </p>
+        </section>
+        <section class="control-section" id="camera-controls">
+          <h2>
+            <span class="section-number">02</span> 카메라 & 센서
+            <span class="section-tag">IMAGING</span>
+          </h2>
+          <div class="lens-switch" role="group" aria-label="렌즈 모델">
+            <button class="active" data-lens="pinhole" aria-pressed="true">
+              Pinhole</button
+            ><button data-lens="fisheye" aria-pressed="false">Fisheye</button>
+          </div>
+          <div class="range-control">
+            <label for="scanMs"
+              >센서 읽기 시간
+              <output id="scanMs-value">22 <small>ms</small></output></label
+            ><input
+              id="scanMs"
+              type="range"
+              min="0"
+              max="80"
+              step="1"
+              value="22"
+            />
+            <div class="range-ends">
+              <span>동시 촬영</span><span>행마다 시간차</span>
+            </div>
+          </div>
+          <div class="range-control">
+            <label for="exposureMs"
+              >행별 노출 시간
+              <output id="exposureMs-value"
+                >1.0 <small>ms</small></output
+              ></label
+            ><input
+              id="exposureMs"
+              type="range"
+              min="0"
+              max="20"
+              step="0.5"
+              value="1"
+            />
+          </div>
+          <div class="range-control">
+            <label for="fov"
+              >수평 시야각
+              <output id="fov-value">65 <small>°</small></output></label
+            ><input
+              id="fov"
+              type="range"
+              min="30"
+              max="150"
+              step="1"
+              value="65"
+            />
+          </div>
+          <div class="range-control">
+            <label for="tilt"
+              >회전면 기울기
+              <output id="tilt-value">15 <small>°</small></output></label
+            ><input
+              id="tilt"
+              type="range"
+              min="0"
+              max="65"
+              step="1"
+              value="15"
+            />
+          </div>
+          <div class="range-control">
+            <label for="offsetX"
+              >막대의 좌우 위치
+              <output id="offsetX-value">0.45 <small>m</small></output></label
+            ><input
+              id="offsetX"
+              type="range"
+              min="-1.2"
+              max="1.2"
+              step="0.05"
+              value="0.45"
+            />
+          </div>
+          <div class="select-control">
+            <label for="direction">센서 읽기 방향</label
+            ><select id="direction">
+              <option value="1">위에서 아래로 ↓</option>
+              <option value="-1">아래에서 위로 ↑</option>
+            </select>
+          </div>
+          <div class="select-control">
+            <label for="samples">노출 샘플 수</label
+            ><select id="samples">
+              <option value="4">4 · 빠르게</option>
+              <option value="8" selected>8 · 균형</option>
+              <option value="16">16 · 정밀하게</option>
+            </select>
+          </div>
+        </section>
+        <div class="sidebar-foot">
+          <span class="tiny-cross">+</span
+          ><span
+            >카메라·센서에서 촬영 조건을,<br />회전 물리에서 움직임을
+            바꿔보세요.</span
+          >
+        </div>
+      </aside>
+      <main>
+        <div class="experiment-heading">
+          <div>
+            <div class="eyebrow orange">CAMERA PHYSICS PLAYGROUND</div>
+            <h1>시간이 만드는 왜곡</h1>
+            <p>회전은 같아도, 센서가 읽는 순간은 다릅니다.</p>
+          </div>
+          <div class="engine-badge" id="engine-badge">
+            <span class="engine-chip" aria-hidden="true">▦</span>
+            <div>
+              <strong id="engine-name">CUDA 연결 중</strong
+              ><span id="gpu-name">렌더러를 확인하고 있습니다</span>
+            </div>
+          </div>
+        </div>
+        <div class="experiment-toolbar">
+          <div class="playback">
+            <button
+              id="play"
+              class="play-button"
+              aria-label="시뮬레이션 일시정지"
+            >
+              <span id="play-symbol">Ⅱ</span
+              ><span id="play-label">일시정지</span></button
+            ><button
+              id="step"
+              class="icon-button"
+              aria-label="한 프레임 진행"
+              title="한 프레임 진행"
+            >
+              ▸|
+            </button>
+            <div class="toolbar-separator"></div>
+            <label for="playback-speed" class="sr-only">재생 배속</label
+            ><select id="playback-speed">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option></select
+            ><span class="timecode" id="timecode">00:00.000</span>
+          </div>
+          <div class="toolbar-right">
+            <span class="frame-state" id="frame-state">렌더링 준비</span
+            ><button
+              id="capture"
+              class="capture-button"
+              aria-label="현재 비교 화면을 PNG로 저장"
+            >
+              <span aria-hidden="true">⊡</span> 화면 저장
+            </button>
+            <div class="experiment-file-menu">
+              <button
+                id="save-settings"
+                class="capture-button"
+                title="물체·물리 상태·촬영 조건을 JSON으로 저장"
+              >
+                조건 저장</button
+              ><button
+                id="load-settings"
+                class="capture-button"
+                title="저장한 실험 조건 불러오기"
+              >
+                불러오기</button
+              ><input
+                type="file"
+                id="settings-file"
+                accept="application/json,.json"
+                hidden
+              />
+            </div>
+          </div>
+        </div>
+        <div class="comparison-tools">
+          <div
+            class="view-mode-switch"
+            role="group"
+            aria-label="영상 비교 방식"
+          >
+            <button data-mode="side-by-side" class="active" aria-pressed="true">
+              나란히</button
+            ><button data-mode="overlay" aria-pressed="false">겹쳐 보기</button
+            ><button data-mode="difference" aria-pressed="false">
+              차이 보기
+            </button>
+          </div>
+          <div class="blend-control" id="blend-control" hidden>
+            <label for="blend">Rolling 비중</label
+            ><input
+              type="range"
+              id="blend"
+              min="0"
+              max="100"
+              value="50"
+            /><output id="blend-value">50%</output>
+          </div>
+          <div
+            class="pixel-difference"
+            title="전체 영상의 RGB 평균 절대 차이. 왜곡 복원 오차가 아닌 두 셔터 영상의 차이입니다."
+          >
+            픽셀 평균 차이 <strong id="pixel-mae">—</strong><span>/ 255</span>
+          </div>
+          <label for="backend" class="sr-only">렌더링 엔진</label
+          ><select id="backend">
+            <option value="auto">CUDA 자동 선택</option>
+            <option value="webgl">브라우저 WebGL2</option>
+          </select>
+        </div>
+        <section class="comparison" aria-label="셔터 방식 비교">
+          <article class="camera-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="camera-number">A</span>
+                <h2>Global shutter</h2>
+              </div>
+              <span class="panel-type">동시에 촬영</span>
+            </div>
+            <div class="camera-image">
+              <canvas
+                id="global-view"
+                width="640"
+                height="448"
+                aria-label="모든 행을 같은 시간에 촬영한 회전 물체"
+              ></canvas>
+              <div class="view-topline">
+                <span id="global-lens">PINHOLE · 65°</span
+                ><span>REFERENCE</span>
+              </div>
+              <div class="center-mark" aria-hidden="true"></div>
+              <div class="view-bottomline">
+                <span class="view-coordinate">CAM 01 / FRONT</span
+                ><span id="global-exposure">EXPOSURE 1.0 ms</span>
+              </div>
+            </div>
+            <div class="panel-caption">
+              <span class="caption-line global"></span>
+              <p>모든 행이 같은 순간을 기록합니다.</p>
+            </div>
+          </article>
+          <article class="camera-panel rolling">
+            <div class="panel-heading">
+              <div>
+                <span class="camera-number">B</span>
+                <h2 id="rolling-title">Rolling shutter</h2>
+              </div>
+              <span class="panel-type" id="rolling-type">순서대로 촬영</span>
+            </div>
+            <div class="camera-image">
+              <canvas
+                id="rolling-view"
+                width="640"
+                height="448"
+                aria-label="각 행을 다른 시간에 촬영한 회전 물체"
+              ></canvas>
+              <div class="view-topline">
+                <span id="rolling-lens">PINHOLE · 65°</span
+                ><span class="rolling-accent" id="rolling-view-label"
+                  >ROW BY ROW</span
+                >
+              </div>
+              <div class="center-mark" aria-hidden="true"></div>
+              <div class="readout-line" id="readout-line" aria-hidden="true">
+                <span></span>
+              </div>
+              <div class="view-bottomline">
+                <span class="view-coordinate" id="readout-direction"
+                  >READOUT ↓</span
+                ><span id="rolling-scan">SCAN 22 ms</span>
+              </div>
+            </div>
+            <div class="panel-caption">
+              <span class="caption-line rolling"></span>
+              <p id="rolling-caption">
+                행마다 달라진 물체의 자세가 한 장에 모입니다.
+              </p>
+            </div>
+          </article>
+        </section>
+        <div class="render-error" id="render-error" role="alert" hidden></div>
+        <section class="metrics" aria-label="현재 실험 측정값">
+          <div class="metric">
+            <span>현재 회전 속도</span>
+            <div>
+              <strong id="live-rpm">120.0</strong><small>rpm</small
+              ><svg viewBox="0 0 95 30" class="sparkline" aria-hidden="true">
+                <path id="speed-sparkline" d="M0 20L95 20" />
+              </svg>
+            </div>
+          </div>
+          <div class="metric">
+            <span>센서 읽기 중 회전</span>
+            <div>
+              <strong id="sweep-value">15.84</strong><small>°</small
+              ><span class="metric-indicator orange"></span>
+            </div>
+          </div>
+          <div class="metric">
+            <span>노출 중 회전</span>
+            <div>
+              <strong id="blur-value">0.72</strong><small>°</small
+              ><span class="metric-indicator teal"></span>
+            </div>
+          </div>
+          <div class="metric">
+            <span id="render-time-label">CUDA 커널 실행 시간</span>
+            <div><strong id="kernel-ms">—</strong><small>ms</small></div>
+          </div>
+        </section>
+        <div
+          class="experiment-message"
+          id="experiment-message"
+          role="status"
+          hidden
+        ></div>
+        <section class="analysis-row">
+          <article class="timing-card">
+            <div class="card-header">
+              <h2>센서의 시간 지도</h2>
+              <span>ROW / TIME</span>
+            </div>
+            <canvas
+              id="timing-chart"
+              width="640"
+              height="170"
+              aria-label="Global과 Rolling shutter의 행별 촬영 시간 그래프"
+            ></canvas>
+            <div class="chart-legend">
+              <span><i class="legend-line global"></i>Global</span
+              ><span><i class="legend-line rolling"></i>Rolling</span
+              ><span><i class="legend-area"></i>노출 구간</span
+              ><span class="legend-note">프레임 중앙 시각 = 0 ms</span>
+            </div>
+          </article>
+          <article class="insight-card">
+            <div class="card-header">
+              <h2>지금 관찰할 것</h2>
+              <span class="insight-icon">⌖</span>
+            </div>
+            <p id="insight-text">
+              센서 읽기 시간을 늘려보세요. 더 오래 읽는 동안 막대가 더 많이
+              회전합니다.
+            </p>
+            <div class="insight-equation">
+              <span>회전 운동</span><strong>I · dω/dt = τ − bω</strong>
+            </div>
+            <div class="physical-stats">
+              <span
+                >각가속도
+                <strong id="alpha-value"
+                  >0.00 <small>rad/s²</small></strong
+                ></span
+              ><span
+                >회전 에너지
+                <strong id="energy-value">39.48 <small>J</small></strong></span
+              >
+            </div>
+          </article>
+        </section>
+        <footer class="main-footer">
+          <span><i></i>물리 상태와 행별 촬영 시각으로 직접 렌더링</span
+          ><span id="render-size">640 × 448 / VIEW</span
+          ><span>SHUTTER LAB / 03</span>
+        </footer>
+      </main>
+    </div>
+    <dialog id="theory-dialog">
+      <div class="dialog-heading">
+        <span class="eyebrow orange">EXPERIMENT GUIDE</span
+        ><button
+          class="icon-button"
+          id="theory-close"
+          aria-label="실험 가이드 닫기"
+        >
+          ×
+        </button>
+      </div>
+      <h2>움직임과 촬영 시간을<br />따로 생각해 보세요.</h2>
+      <p>
+        막대·프로펠러·사각 프레임·스포크 휠을 고정축 주위로 회전시킵니다. 토크와
+        감쇠를 반영한 운동을 계산하고, 각 픽셀의 광선으로 장면을 렌더링합니다.
+        CUDA와 브라우저 WebGL2 중 사용할 엔진을 선택할 수 있습니다.
+      </p>
+      <div class="guide-step">
+        <span>01</span>
+        <div>
+          <h3>회전 운동</h3>
+          <p>
+            회전 관성 I, 토크 τ, 감쇠 b로 각속도 ω를 계산합니다. 토크와 감쇠가
+            0이면 일정한 속도로 회전합니다.
+          </p>
+          <code>I · dω/dt = τ − bω</code>
+        </div>
+      </div>
+      <div class="guide-step">
+        <span>02</span>
+        <div>
+          <h3>카메라 투영</h3>
+          <p>
+            Pinhole은 r = f tanθ, 이 실험의 이상적인 equidistant Fisheye는 r =
+            fθ를 사용합니다. 막대를 중심에서 옮기면 렌즈가 만드는 휘어짐을 더
+            쉽게 볼 수 있습니다.
+          </p>
+        </div>
+      </div>
+      <div class="guide-step">
+        <span>03</span>
+        <div>
+          <h3>센서의 시간차</h3>
+          <p>
+            Global은 모든 행의 기준 시각이 같습니다. Rolling은 읽기 방향과 행
+            위치에 따라 시각이 달라집니다. 두 영상 모두 같은 행별 노출 시간으로
+            여러 시각을 평균합니다.
+          </p>
+          <code>t(y) = direction · ((y + ½) / H − ½) · Tscan</code>
+        </div>
+      </div>
+      <p class="guide-note">
+        읽기 중 회전·노출 중 회전 값은 실제 회전각 변화입니다. 영상의 픽셀
+        변위나 왜곡 오차를 뜻하지 않습니다. 재생 배속은 시뮬레이션 시계만 바꾸며
+        촬영 시간 설정은 유지합니다.
+      </p>
+      <p class="guide-note">
+        카메라와 회전축의 거리는 5.8 m, 격자 간격은 0.5 m입니다. 물체를 선택하면
+        권장 관성이 적용되고 회전 물리에서 다시 조절할 수 있습니다. 두 엔진의
+        조명·공간 샘플링은 달라 픽셀이 서로 일치하지는 않습니다. RGB 차이는 같은
+        엔진의 두 셔터 사이에서 계산합니다.
+      </p>
+      <div class="guide-sources">
+        <a
+          href="https://docs.baslerweb.com/electronic-shutter-types"
+          target="_blank"
+          rel="noreferrer"
+          >Basler · 셔터 방식</a
+        ><a
+          href="https://docs.opencv.org/4.x/db/d58/group__calib3d__fisheye.html"
+          target="_blank"
+          rel="noreferrer"
+          >OpenCV · Fisheye 모델</a
+        >
+      </div>
+      <p class="shortcut-note">
+        Space 재생 / 정지 <span>·</span> R 초기화 <span>·</span> → 한 프레임
+        진행
+      </p>
+    </dialog>
+    <script type="module" src="/app.mjs"></script>
+  </body>
+</html>

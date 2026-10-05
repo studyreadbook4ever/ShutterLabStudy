@@ -1,0 +1,37 @@
+name: Verify Shutter Lab
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-and-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser simulator
+        run: npm run test:browser
+      - name: Verify WebGL camera physics
+        run: npm run test:webgl
+      - name: Save browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shutter-lab-browser
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
